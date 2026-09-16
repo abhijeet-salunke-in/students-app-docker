@@ -1,0 +1,39 @@
+services:
+
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    volumes:
+      - students-data:/data/db
+    networks:
+      - students-network
+
+  backend:
+    image: ${BACKEND_IMAGE}:${IMG_VERSION}
+    container_name: node-service
+    environment:
+      PORT: 5000
+      MONGO_URI: mongodb://mongodb:27017/college
+    ports:
+      - "5000:5000"
+    depends_on:
+      - mongodb
+    networks:
+      - students-network
+
+  frontend:
+    image: ${FRONTEND_IMAGE}:${IMG_VERSION}
+    container_name: student-frontend
+    ports:
+      - "1001:80"
+    depends_on:
+      - backend
+    networks:
+      - students-network
+
+volumes:
+  students-data:
+
+networks:
+  students-network:
+    driver: bridge
