@@ -22,7 +22,9 @@ const studentSchema = new mongoose.Schema(
     },
     age: {
       type: Number,
-      required: true
+      required: true,
+      min: 1,
+      max: 100
     }
   },
   {
@@ -32,52 +34,67 @@ const studentSchema = new mongoose.Schema(
 
 const Student = mongoose.model("Student", studentSchema, "students");
 
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => {
-    console.log("MongoDB Connected");
 
-    app.listen(5000, () => {
-      console.log("Server running on port 5000");
-    });
-  })
-  .catch((err) => {
-    console.error("MongoDB Connection Error:", err);
-  });
-
-
-// GET ALL STUDENTS
+// GET - Read all students
 app.get("/api/students", async (req, res) => {
   try {
     const students = await Student.find().sort({ createdAt: -1 });
     res.json(students);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({
+      error: error.message
+    });
   }
 });
 
 
-// ADD STUDENT
+// GET - Read single student
+app.get("/api/students/:id", async (req, res) => {
+  try {
+    const student = await Student.findById(req.params.id);
+
+    if (!student) {
+      return res.status(404).json({
+        error: "Student not found"
+      });
+    }
+
+    res.json(student);
+  } catch (error) {
+    res.status(400).json({
+      error: "Invalid student ID"
+    });
+  }
+});
+
+
+// POST - Create student
 app.post("/api/students", async (req, res) => {
   try {
     const { name, course, age } = req.body;
 
-    const student = new Student({
+    if (!name || !course || age === undefined) {
+      return res.status(400).json({
+        error: "Name, course and age are required"
+      });
+    }
+
+    const student = await Student.create({
       name,
       course,
       age
     });
 
-    const savedStudent = await student.save();
-
-    res.status(201).json(savedStudent);
+    res.status(201).json(student);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(400).json({
+      error: error.message
+    });
   }
 });
 
 
-// UPDATE STUDENT
+// PUT - Update student
 app.put("/api/students/:id", async (req, res) => {
   try {
     const { name, course, age } = req.body;
@@ -103,12 +120,14 @@ app.put("/api/students/:id", async (req, res) => {
 
     res.json(student);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(400).json({
+      error: error.message
+    });
   }
 });
 
 
-// DELETE STUDENT
+// DELETE - Delete student
 app.delete("/api/students/:id", async (req, res) => {
   try {
     const student = await Student.findByIdAndDelete(req.params.id);
@@ -123,6 +142,31 @@ app.delete("/api/students/:id", async (req, res) => {
       message: "Student deleted successfully"
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(400).json({
+      error: "Invalid student ID"
+    });
   }
 });
+
+
+// Health check
+app.get("/health", (req, res) => {
+  res.json({
+    status: "OK",
+    service: "student-backend"
+  });
+});
+
+
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => {
+    console.log("MongoDB Connected");
+
+    app.listen(5000, () => {
+      console.log("Server running on port 5000");
+    });
+  })
+  .catch((error) => {
+    console.error("MongoDB Connection Error:", error);
+  });

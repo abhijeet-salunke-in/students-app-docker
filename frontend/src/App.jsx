@@ -4,24 +4,31 @@ import "./App.css";
 
 const emptyForm = {
   name: "",
-  age: "",
-  course: "BCA"
+  course: "",
+  age: ""
 };
 
 function App() {
   const [students, setStudents] = useState([]);
-  const [search, setSearch] = useState("");
-  const [showModal, setShowModal] = useState(false);
-  const [editingStudent, setEditingStudent] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState(null);
+
+  const [search, setSearch] = useState("");
+  const [courseFilter, setCourseFilter] = useState("All");
+
+  const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   const fetchStudents = async () => {
     try {
+      setLoading(true);
       const response = await axios.get("/api/students");
       setStudents(response.data);
-    } catch (error) {
-      console.error("Error fetching students:", error);
+      setError("");
+    } catch (err) {
+      setError("Unable to load students.");
     } finally {
       setLoading(false);
     }
@@ -31,71 +38,102 @@ function App() {
     fetchStudents();
   }, []);
 
-  const filteredStudents = useMemo(() => {
-    return students.filter((student) =>
-      student.name.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [students, search]);
+  const courses = useMemo(() => {
+    return [...new Set(students.map((student) => student.course))];
+  }, [students]);
 
-  const totalCourses = new Set(students.map((s) => s.course)).size;
+  const filteredStudents = useMemo(() => {
+    return students.filter((student) => {
+      const matchesSearch =
+        student.name.toLowerCase().includes(search.toLowerCase()) ||
+        student.course.toLowerCase().includes(search.toLowerCase());
+
+      const matchesCourse =
+        courseFilter === "All" || student.course === courseFilter;
+
+      return matchesSearch && matchesCourse;
+    });
+  }, [students, search, courseFilter]);
 
   const averageAge =
     students.length > 0
       ? (
-          students.reduce((sum, student) => sum + Number(student.age), 0) /
+          students.reduce((total, student) => total + student.age, 0) /
           students.length
         ).toFixed(1)
-      : "0";
+      : 0;
 
   const openAddModal = () => {
-    setEditingStudent(null);
     setForm(emptyForm);
+    setEditingId(null);
+    setError("");
     setShowModal(true);
   };
 
   const openEditModal = (student) => {
-    setEditingStudent(student);
-
     setForm({
       name: student.name,
-      age: student.age,
-      course: student.course
+      course: student.course,
+      age: student.age
     });
 
+    setEditingId(student._id);
+    setError("");
     setShowModal(true);
   };
 
   const closeModal = () => {
-    setShowModal(false);
-    setEditingStudent(null);
-    setForm(emptyForm);
+    if (!saving) {
+      setShowModal(false);
+      setForm(emptyForm);
+      setEditingId(null);
+    }
   };
 
-  const handleChange = (e) => {
+  const handleChange = (event) => {
     setForm({
       ...form,
-      [e.target.name]: e.target.value
+      [event.target.name]: event.target.value
     });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!form.name.trim() || !form.course.trim() || !form.age) {
+      setError("Please fill in all fields.");
+      return;
+    }
+
+    if (Number(form.age) < 1 || Number(form.age) > 100) {
+      setError("Age must be between 1 and 100.");
+      return;
+    }
 
     try {
-      if (editingStudent) {
-        await axios.put(
-          `/api/students/${editingStudent._id}`,
-          form
-        );
+      setSaving(true);
+      setError("");
+
+      const data = {
+        name: form.name.trim(),
+        course: form.course.trim(),
+        age: Number(form.age)
+      };
+
+      if (editingId) {
+        await axios.put(`/api/students/${editingId}`, data);
       } else {
-        await axios.post("/api/students", form);
+        await axios.post("/api/students", data);
       }
 
+      await fetchStudents();
       closeModal();
-      fetchStudents();
-    } catch (error) {
-      console.error("Error saving student:", error);
-      alert("Unable to save student.");
+    } catch (err) {
+      setError(
+        err.response?.data?.error || "Something went wrong. Please try again."
+      );
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -108,408 +146,248 @@ function App() {
 
     try {
       await axios.delete(`/api/students/${id}`);
-      fetchStudents();
-    } catch (error) {
-      console.error("Error deleting student:", error);
-      alert("Unable to delete student.");
+      await fetchStudents();
+    } catch (err) {
+      setError("Unable to delete student.");
     }
   };
 
   return (
     <div className="app">
+      <header className="topbar">
+        <div>
+          <div className="brand">🎓 StudentHub</div>
+          <p>Student Management System</p>
+        </div>
 
-      {/* SIDEBAR */}
-      <aside className="sidebar">
+        <button className="add-button" onClick={openAddModal}>
+          + Add Student
+        </button>
+      </header>
 
-        <div className="brand">
-          <div className="brand-icon">🎓</div>
-
+      <main className="container">
+        <section className="hero">
           <div>
-            <h2>Student Portal</h2>
-            <span>Manage • Learn • Grow</span>
+            <span className="eyebrow">COLLEGE DATABASE</span>
+            <h1>Manage your students.</h1>
+            <p>
+              Add, update, search and manage student records from one simple
+              dashboard.
+            </p>
           </div>
-        </div>
+        </section>
 
-        <nav className="navigation">
+        {error && !showModal && (
+          <div className="error-banner">{error}</div>
+        )}
 
-          <div className="nav-item active">
-            <span>⌂</span>
-            Dashboard
-          </div>
-
-          <div className="nav-item">
-            <span>♙</span>
-            Students
-          </div>
-
-          <div className="nav-item">
-            <span>⚙</span>
-            Settings
+        <section className="stats">
+          <div className="stat-card">
+            <span>Total Students</span>
+            <strong>{students.length}</strong>
           </div>
 
-        </nav>
-
-        <div className="sidebar-bottom">
-          <div className="connection">
-            <span className="status-dot"></span>
-            API Connected
+          <div className="stat-card">
+            <span>Courses</span>
+            <strong>{courses.length}</strong>
           </div>
 
-          <small>v1.0.0</small>
-        </div>
-
-      </aside>
-
-
-      {/* MAIN */}
-      <main className="main">
-
-        {/* TOP BAR */}
-        <header className="topbar">
-
-          <div className="welcome">
-            <strong>Welcome back!</strong>
-            <span>Here's an overview of your students</span>
+          <div className="stat-card">
+            <span>Average Age</span>
+            <strong>{averageAge}</strong>
           </div>
+        </section>
 
-          <div className="admin">
-            <div className="date">
-              📅
-              <span>
-                {new Date().toLocaleDateString("en-IN", {
-                  weekday: "short",
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric"
-                })}
-              </span>
+        <section className="content-card">
+          <div className="toolbar">
+            <div className="search-box">
+              <span>⌕</span>
+              <input
+                type="text"
+                placeholder="Search students..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
             </div>
 
-            <div className="avatar">A</div>
-
-            <strong>Admin</strong>
-          </div>
-
-        </header>
-
-
-        {/* CONTENT */}
-        <section className="content">
-
-          <div className="page-heading">
-            <div>
-              <h1>
-                Student <span>Management System</span>
-              </h1>
-
-              <p>
-                Keep track of your students, courses and records
-              </p>
-            </div>
-
-            <button
-              className="add-button"
-              onClick={openAddModal}
+            <select
+              value={courseFilter}
+              onChange={(e) => setCourseFilter(e.target.value)}
             >
-              + Add Student
-            </button>
+              <option value="All">All Courses</option>
+
+              {courses.map((course) => (
+                <option key={course} value={course}>
+                  {course}
+                </option>
+              ))}
+            </select>
           </div>
 
-
-          {/* STATISTICS */}
-          <div className="stats">
-
-            <div className="stat-card">
-              <div className="stat-icon blue">♙</div>
-
-              <div>
-                <p>Total Students</p>
-                <h2>{students.length}</h2>
-              </div>
+          {loading ? (
+            <div className="state">
+              <div className="spinner"></div>
+              <p>Loading students...</p>
             </div>
-
-
-            <div className="stat-card">
-              <div className="stat-icon green">▣</div>
-
-              <div>
-                <p>Total Courses</p>
-                <h2>{totalCourses}</h2>
-              </div>
+          ) : filteredStudents.length === 0 ? (
+            <div className="state">
+              <div className="empty-icon">📚</div>
+              <h3>No students found</h3>
+              <p>Try another search or add a new student.</p>
             </div>
-
-
-            <div className="stat-card">
-              <div className="stat-icon purple">♙</div>
-
-              <div>
-                <p>Average Age</p>
-                <h2>{averageAge}</h2>
-              </div>
-            </div>
-
-
-            <div className="stat-card">
-              <div className="stat-icon orange">↗</div>
-
-              <div>
-                <p>Showing</p>
-                <h2>{filteredStudents.length}</h2>
-              </div>
-            </div>
-
-          </div>
-
-
-          {/* STUDENTS */}
-          <div className="students-card">
-
-            <div className="students-header">
-
-              <div>
-                <h2>Students</h2>
-                <p>View and manage all students</p>
-              </div>
-
-              <div className="search-box">
-                <span>⌕</span>
-
-                <input
-                  type="text"
-                  placeholder="Search students..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-
-                {search && (
-                  <button onClick={() => setSearch("")}>
-                    ×
-                  </button>
-                )}
-              </div>
-
-            </div>
-
-
-            {/* TABLE */}
+          ) : (
             <div className="table-wrapper">
-
               <table>
-
                 <thead>
                   <tr>
-                    <th>#</th>
-                    <th>Name</th>
-                    <th>Age</th>
+                    <th>Student</th>
                     <th>Course</th>
-                    <th>Added On</th>
+                    <th>Age</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
 
                 <tbody>
-
-                  {loading ? (
-                    <tr>
-                      <td colSpan="6" className="empty">
-                        Loading students...
-                      </td>
-                    </tr>
-                  ) : filteredStudents.length === 0 ? (
-                    <tr>
-                      <td colSpan="6" className="empty">
-                        No students found.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredStudents.map((student, index) => (
-
-                      <tr key={student._id}>
-
-                        <td>{index + 1}</td>
-
-                        <td className="student-name">
-                          {student.name}
-                        </td>
-
-                        <td>{student.age}</td>
-
-                        <td>
-                          <span className="course-badge">
-                            {student.course}
-                          </span>
-                        </td>
-
-                        <td>
-                          {student.createdAt
-                            ? new Date(
-                                student.createdAt
-                              ).toLocaleDateString("en-IN")
-                            : "-"}
-                        </td>
-
-                        <td>
-
-                          <div className="actions">
-
-                            <button
-                              className="edit-btn"
-                              onClick={() =>
-                                openEditModal(student)
-                              }
-                            >
-                              ✎ Edit
-                            </button>
-
-                            <button
-                              className="delete-btn"
-                              onClick={() =>
-                                deleteStudent(student._id)
-                              }
-                            >
-                              × Delete
-                            </button>
-
+                  {filteredStudents.map((student) => (
+                    <tr key={student._id}>
+                      <td>
+                        <div className="student-info">
+                          <div className="avatar">
+                            {student.name.charAt(0).toUpperCase()}
                           </div>
 
-                        </td>
+                          <div>
+                            <strong>{student.name}</strong>
+                            <small>Student</small>
+                          </div>
+                        </div>
+                      </td>
 
-                      </tr>
+                      <td>
+                        <span className="course-badge">
+                          {student.course}
+                        </span>
+                      </td>
 
-                    ))
-                  )}
+                      <td>{student.age}</td>
 
+                      <td>
+                        <div className="actions">
+                          <button
+                            className="edit"
+                            onClick={() => openEditModal(student)}
+                          >
+                            Edit
+                          </button>
+
+                          <button
+                            className="delete"
+                            onClick={() => deleteStudent(student._id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
-
               </table>
-
             </div>
-
-
-            <div className="table-footer">
-              Showing {filteredStudents.length} of {students.length} students
-            </div>
-
-          </div>
-
-
-          <footer>
-            © 2026 Student Management System
-            <span>Built with MERN • Docker • Jenkins</span>
-          </footer>
-
+          )}
         </section>
-
       </main>
 
+      <footer>
+        <span>StudentHub</span>
+        <span>MERN Stack • Dockerized Application</span>
+      </footer>
 
-      {/* MODAL */}
       {showModal && (
-
-        <div className="modal-overlay">
-
-          <div className="modal">
-
+        <div className="modal-overlay" onClick={closeModal}>
+          <div
+            className="modal"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="modal-header">
-
               <div>
-                <h2>
-                  {editingStudent
-                    ? "Edit Student"
-                    : "Add Student"}
-                </h2>
+                <span className="eyebrow">
+                  {editingId ? "UPDATE RECORD" : "NEW RECORD"}
+                </span>
 
-                <p>
-                  {editingStudent
-                    ? "Update student information"
-                    : "Enter student information"}
-                </p>
+                <h2>
+                  {editingId ? "Edit Student" : "Add Student"}
+                </h2>
               </div>
 
-              <button
-                className="close-btn"
-                onClick={closeModal}
-              >
+              <button className="close" onClick={closeModal}>
                 ×
               </button>
-
             </div>
 
+            {error && <div className="modal-error">{error}</div>}
 
             <form onSubmit={handleSubmit}>
-
               <label>
                 Student Name
                 <input
-                  type="text"
                   name="name"
+                  type="text"
+                  placeholder="Enter student name"
                   value={form.name}
                   onChange={handleChange}
-                  placeholder="Enter student name"
-                  required
                 />
               </label>
 
+              <label>
+                Course
+                <input
+                  name="course"
+                  type="text"
+                  placeholder="e.g. BCA"
+                  value={form.course}
+                  onChange={handleChange}
+                />
+              </label>
 
               <label>
                 Age
                 <input
-                  type="number"
                   name="age"
+                  type="number"
+                  min="1"
+                  max="100"
+                  placeholder="Enter age"
                   value={form.age}
                   onChange={handleChange}
-                  placeholder="Enter age"
-                  min="1"
-                  required
                 />
               </label>
 
-
-              <label>
-                Course
-                <select
-                  name="course"
-                  value={form.course}
-                  onChange={handleChange}
-                >
-                  <option value="BCA">BCA</option>
-                  <option value="BCS">BCS</option>
-                  <option value="BBA">BBA</option>
-                  <option value="B.Com">B.Com</option>
-                  <option value="MCA">MCA</option>
-                </select>
-              </label>
-
-
-              <div className="modal-actions">
-
+              <div className="form-actions">
                 <button
                   type="button"
-                  className="cancel-btn"
+                  className="cancel"
                   onClick={closeModal}
+                  disabled={saving}
                 >
                   Cancel
                 </button>
 
                 <button
                   type="submit"
-                  className="save-btn"
+                  className="save"
+                  disabled={saving}
                 >
-                  {editingStudent
+                  {saving
+                    ? "Saving..."
+                    : editingId
                     ? "Update Student"
                     : "Add Student"}
                 </button>
-
               </div>
-
             </form>
-
           </div>
-
         </div>
-
       )}
-
     </div>
   );
 }
