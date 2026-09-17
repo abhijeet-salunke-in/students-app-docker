@@ -1,140 +1,82 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import "./App.css";
 
-const courses = ["BCA", "BCS", "BBA", "MCA", "MBA"];
+const emptyForm = {
+  name: "",
+  age: "",
+  course: "BCA"
+};
 
 function App() {
   const [students, setStudents] = useState([]);
-
   const [search, setSearch] = useState("");
-  const [course, setCourse] = useState("");
-  const [age, setAge] = useState("");
-
-  const [showForm, setShowForm] = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
-
-  const [formData, setFormData] = useState({
-    name: "",
-    course: "",
-    age: ""
-  });
-
-  const [stats, setStats] = useState({
-    totalStudents: 0,
-    courses: [],
-    averageAge: 0
-  });
-
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
-
-  /* =========================
-     FETCH STUDENTS
-  ========================= */
+  const [form, setForm] = useState(emptyForm);
+  const [loading, setLoading] = useState(true);
 
   const fetchStudents = async () => {
     try {
-      setLoading(true);
-
-      const params = {};
-
-      if (search) params.search = search;
-      if (course) params.course = course;
-      if (age) params.age = age;
-
-      const response = await axios.get("/api/students", {
-        params
-      });
-
+      const response = await axios.get("/api/students");
       setStudents(response.data);
     } catch (error) {
-      console.error(error);
-      setMessage("Failed to fetch students.");
+      console.error("Error fetching students:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  /* =========================
-     FETCH STATISTICS
-  ========================= */
-
-  const fetchStats = async () => {
-    try {
-      const response = await axios.get("/api/students/stats");
-      setStats(response.data);
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
   useEffect(() => {
     fetchStudents();
-    fetchStats();
   }, []);
 
-  /* =========================
-     SEARCH / FILTER
-  ========================= */
+  const filteredStudents = useMemo(() => {
+    return students.filter((student) =>
+      student.name.toLowerCase().includes(search.toLowerCase())
+    );
+  }, [students, search]);
 
-  const handleFilter = () => {
-    fetchStudents();
+  const totalCourses = new Set(students.map((s) => s.course)).size;
+
+  const averageAge =
+    students.length > 0
+      ? (
+          students.reduce((sum, student) => sum + Number(student.age), 0) /
+          students.length
+        ).toFixed(1)
+      : "0";
+
+  const openAddModal = () => {
+    setEditingStudent(null);
+    setForm(emptyForm);
+    setShowModal(true);
   };
 
-  const clearFilters = () => {
-    setSearch("");
-    setCourse("");
-    setAge("");
+  const openEditModal = (student) => {
+    setEditingStudent(student);
 
-    setTimeout(() => {
-      fetchStudents();
-    }, 0);
+    setForm({
+      name: student.name,
+      age: student.age,
+      course: student.course
+    });
+
+    setShowModal(true);
   };
 
-  /* =========================
-     FORM HANDLING
-  ========================= */
+  const closeModal = () => {
+    setShowModal(false);
+    setEditingStudent(null);
+    setForm(emptyForm);
+  };
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
+    setForm({
+      ...form,
       [e.target.name]: e.target.value
     });
   };
-
-  const openAddForm = () => {
-    setEditingStudent(null);
-
-    setFormData({
-      name: "",
-      course: "",
-      age: ""
-    });
-
-    setShowForm(true);
-  };
-
-  const openEditForm = (student) => {
-    setEditingStudent(student);
-
-    setFormData({
-      name: student.name,
-      course: student.course,
-      age: student.age
-    });
-
-    setShowForm(true);
-  };
-
-  const closeForm = () => {
-    setShowForm(false);
-    setEditingStudent(null);
-  };
-
-  /* =========================
-     CREATE / UPDATE
-  ========================= */
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -143,347 +85,415 @@ function App() {
       if (editingStudent) {
         await axios.put(
           `/api/students/${editingStudent._id}`,
-          formData
+          form
         );
-
-        setMessage("Student updated successfully.");
       } else {
-        await axios.post("/api/students", formData);
-
-        setMessage("Student added successfully.");
+        await axios.post("/api/students", form);
       }
 
-      closeForm();
-
-      await fetchStudents();
-      await fetchStats();
+      closeModal();
+      fetchStudents();
     } catch (error) {
-      console.error(error);
-
-      setMessage(
-        error.response?.data?.error ||
-          "Something went wrong."
-      );
+      console.error("Error saving student:", error);
+      alert("Unable to save student.");
     }
   };
 
-  /* =========================
-     DELETE
-  ========================= */
-
   const deleteStudent = async (id) => {
-    const confirmDelete = window.confirm(
+    const confirmed = window.confirm(
       "Are you sure you want to delete this student?"
     );
 
-    if (!confirmDelete) return;
+    if (!confirmed) return;
 
     try {
       await axios.delete(`/api/students/${id}`);
-
-      setMessage("Student deleted successfully.");
-
-      await fetchStudents();
-      await fetchStats();
+      fetchStudents();
     } catch (error) {
-      console.error(error);
-      setMessage("Failed to delete student.");
+      console.error("Error deleting student:", error);
+      alert("Unable to delete student.");
     }
   };
 
   return (
     <div className="app">
 
-      {/* HEADER */}
+      {/* SIDEBAR */}
+      <aside className="sidebar">
 
-      <header className="header">
-        <div>
-          <h1>Student Management</h1>
-          <p>
-            Manage students, courses and records
-          </p>
+        <div className="brand">
+          <div className="brand-icon">🎓</div>
+
+          <div>
+            <h2>Student Portal</h2>
+            <span>Manage • Learn • Grow</span>
+          </div>
         </div>
 
-        <button
-          className="add-btn"
-          onClick={openAddForm}
-        >
-          + Add Student
-        </button>
-      </header>
+        <nav className="navigation">
 
-      {/* STATISTICS */}
+          <div className="nav-item active">
+            <span>⌂</span>
+            Dashboard
+          </div>
 
-      <section className="stats">
+          <div className="nav-item">
+            <span>♙</span>
+            Students
+          </div>
 
-        <div className="stat-card">
-          <span>Total Students</span>
-          <strong>{stats.totalStudents}</strong>
+          <div className="nav-item">
+            <span>⚙</span>
+            Settings
+          </div>
+
+        </nav>
+
+        <div className="sidebar-bottom">
+          <div className="connection">
+            <span className="status-dot"></span>
+            API Connected
+          </div>
+
+          <small>v1.0.0</small>
         </div>
 
-        <div className="stat-card">
-          <span>Total Courses</span>
-          <strong>{stats.courses.length}</strong>
-        </div>
+      </aside>
 
-        <div className="stat-card">
-          <span>Average Age</span>
-          <strong>{stats.averageAge}</strong>
-        </div>
 
-        <div className="stat-card">
-          <span>Showing</span>
-          <strong>{students.length}</strong>
-        </div>
+      {/* MAIN */}
+      <main className="main">
 
-      </section>
+        {/* TOP BAR */}
+        <header className="topbar">
 
-      {/* COURSE STATISTICS */}
+          <div className="welcome">
+            <strong>Welcome back!</strong>
+            <span>Here's an overview of your students</span>
+          </div>
 
-      <section className="course-stats">
-
-        <h2>Course Statistics</h2>
-
-        <div className="course-list">
-
-          {stats.courses.map((item) => (
-            <div
-              className="course-card"
-              key={item._id}
-            >
-              <span>{item._id}</span>
-              <strong>{item.count}</strong>
+          <div className="admin">
+            <div className="date">
+              📅
+              <span>
+                {new Date().toLocaleDateString("en-IN", {
+                  weekday: "short",
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric"
+                })}
+              </span>
             </div>
-          ))}
 
-        </div>
+            <div className="avatar">A</div>
 
-      </section>
-
-      {/* SEARCH / FILTER */}
-
-      <section className="filters">
-
-        <input
-          type="text"
-          placeholder="Search by student name..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              handleFilter();
-            }
-          }}
-        />
-
-        <select
-          value={course}
-          onChange={(e) => setCourse(e.target.value)}
-        >
-          <option value="">All Courses</option>
-
-          {courses.map((item) => (
-            <option key={item} value={item}>
-              {item}
-            </option>
-          ))}
-        </select>
-
-        <input
-          type="number"
-          placeholder="Age"
-          value={age}
-          onChange={(e) => setAge(e.target.value)}
-        />
-
-        <button onClick={handleFilter}>
-          Search
-        </button>
-
-        <button
-          className="clear-btn"
-          onClick={clearFilters}
-        >
-          Clear
-        </button>
-
-      </section>
-
-      {/* MESSAGE */}
-
-      {message && (
-        <div className="message">
-          {message}
-        </div>
-      )}
-
-      {/* STUDENTS */}
-
-      <section className="students-section">
-
-        <div className="section-header">
-          <h2>Students</h2>
-
-          <span>
-            {students.length} record
-            {students.length !== 1 ? "s" : ""}
-          </span>
-        </div>
-
-        {loading ? (
-          <div className="empty">
-            Loading students...
+            <strong>Admin</strong>
           </div>
-        ) : students.length === 0 ? (
-          <div className="empty">
-            No students found.
+
+        </header>
+
+
+        {/* CONTENT */}
+        <section className="content">
+
+          <div className="page-heading">
+            <div>
+              <h1>
+                Student <span>Management System</span>
+              </h1>
+
+              <p>
+                Keep track of your students, courses and records
+              </p>
+            </div>
+
+            <button
+              className="add-button"
+              onClick={openAddModal}
+            >
+              + Add Student
+            </button>
           </div>
-        ) : (
-          <div className="table-container">
 
-            <table>
 
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Age</th>
-                  <th>Course</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
+          {/* STATISTICS */}
+          <div className="stats">
 
-              <tbody>
+            <div className="stat-card">
+              <div className="stat-icon blue">♙</div>
 
-                {students.map((student) => (
-                  <tr key={student._id}>
+              <div>
+                <p>Total Students</p>
+                <h2>{students.length}</h2>
+              </div>
+            </div>
 
-                    <td>
-                      <strong>{student.name}</strong>
-                    </td>
 
-                    <td>{student.age}</td>
+            <div className="stat-card">
+              <div className="stat-icon green">▣</div>
 
-                    <td>
-                      <span className="course-badge">
-                        {student.course}
-                      </span>
-                    </td>
+              <div>
+                <p>Total Courses</p>
+                <h2>{totalCourses}</h2>
+              </div>
+            </div>
 
-                    <td>
 
-                      <button
-                        className="edit-btn"
-                        onClick={() =>
-                          openEditForm(student)
-                        }
-                      >
-                        Edit
-                      </button>
+            <div className="stat-card">
+              <div className="stat-icon purple">♙</div>
 
-                      <button
-                        className="delete-btn"
-                        onClick={() =>
-                          deleteStudent(student._id)
-                        }
-                      >
-                        Delete
-                      </button>
+              <div>
+                <p>Average Age</p>
+                <h2>{averageAge}</h2>
+              </div>
+            </div>
 
-                    </td>
 
+            <div className="stat-card">
+              <div className="stat-icon orange">↗</div>
+
+              <div>
+                <p>Showing</p>
+                <h2>{filteredStudents.length}</h2>
+              </div>
+            </div>
+
+          </div>
+
+
+          {/* STUDENTS */}
+          <div className="students-card">
+
+            <div className="students-header">
+
+              <div>
+                <h2>Students</h2>
+                <p>View and manage all students</p>
+              </div>
+
+              <div className="search-box">
+                <span>⌕</span>
+
+                <input
+                  type="text"
+                  placeholder="Search students..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+
+                {search && (
+                  <button onClick={() => setSearch("")}>
+                    ×
+                  </button>
+                )}
+              </div>
+
+            </div>
+
+
+            {/* TABLE */}
+            <div className="table-wrapper">
+
+              <table>
+
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Name</th>
+                    <th>Age</th>
+                    <th>Course</th>
+                    <th>Added On</th>
+                    <th>Actions</th>
                   </tr>
-                ))}
+                </thead>
 
-              </tbody>
+                <tbody>
 
-            </table>
+                  {loading ? (
+                    <tr>
+                      <td colSpan="6" className="empty">
+                        Loading students...
+                      </td>
+                    </tr>
+                  ) : filteredStudents.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" className="empty">
+                        No students found.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredStudents.map((student, index) => (
+
+                      <tr key={student._id}>
+
+                        <td>{index + 1}</td>
+
+                        <td className="student-name">
+                          {student.name}
+                        </td>
+
+                        <td>{student.age}</td>
+
+                        <td>
+                          <span className="course-badge">
+                            {student.course}
+                          </span>
+                        </td>
+
+                        <td>
+                          {student.createdAt
+                            ? new Date(
+                                student.createdAt
+                              ).toLocaleDateString("en-IN")
+                            : "-"}
+                        </td>
+
+                        <td>
+
+                          <div className="actions">
+
+                            <button
+                              className="edit-btn"
+                              onClick={() =>
+                                openEditModal(student)
+                              }
+                            >
+                              ✎ Edit
+                            </button>
+
+                            <button
+                              className="delete-btn"
+                              onClick={() =>
+                                deleteStudent(student._id)
+                              }
+                            >
+                              × Delete
+                            </button>
+
+                          </div>
+
+                        </td>
+
+                      </tr>
+
+                    ))
+                  )}
+
+                </tbody>
+
+              </table>
+
+            </div>
+
+
+            <div className="table-footer">
+              Showing {filteredStudents.length} of {students.length} students
+            </div>
 
           </div>
-        )}
 
-      </section>
 
-      {/* ADD / EDIT MODAL */}
+          <footer>
+            © 2026 Student Management System
+            <span>Built with MERN • Docker • Jenkins</span>
+          </footer>
 
-      {showForm && (
+        </section>
+
+      </main>
+
+
+      {/* MODAL */}
+      {showModal && (
+
         <div className="modal-overlay">
 
           <div className="modal">
 
             <div className="modal-header">
 
-              <h2>
-                {editingStudent
-                  ? "Edit Student"
-                  : "Add Student"}
-              </h2>
+              <div>
+                <h2>
+                  {editingStudent
+                    ? "Edit Student"
+                    : "Add Student"}
+                </h2>
+
+                <p>
+                  {editingStudent
+                    ? "Update student information"
+                    : "Enter student information"}
+                </p>
+              </div>
 
               <button
                 className="close-btn"
-                onClick={closeForm}
+                onClick={closeModal}
               >
                 ×
               </button>
 
             </div>
 
+
             <form onSubmit={handleSubmit}>
 
-              <label>Name</label>
+              <label>
+                Student Name
+                <input
+                  type="text"
+                  name="name"
+                  value={form.name}
+                  onChange={handleChange}
+                  placeholder="Enter student name"
+                  required
+                />
+              </label>
 
-              <input
-                type="text"
-                name="name"
-                placeholder="Enter student name"
-                value={formData.name}
-                onChange={handleChange}
-                required
-              />
 
-              <label>Course</label>
+              <label>
+                Age
+                <input
+                  type="number"
+                  name="age"
+                  value={form.age}
+                  onChange={handleChange}
+                  placeholder="Enter age"
+                  min="1"
+                  required
+                />
+              </label>
 
-              <select
-                name="course"
-                value={formData.course}
-                onChange={handleChange}
-                required
-              >
-                <option value="">
-                  Select course
-                </option>
 
-                {courses.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
+              <label>
+                Course
+                <select
+                  name="course"
+                  value={form.course}
+                  onChange={handleChange}
+                >
+                  <option value="BCA">BCA</option>
+                  <option value="BCS">BCS</option>
+                  <option value="BBA">BBA</option>
+                  <option value="B.Com">B.Com</option>
+                  <option value="MCA">MCA</option>
+                </select>
+              </label>
 
-              <label>Age</label>
 
-              <input
-                type="number"
-                name="age"
-                placeholder="Enter age"
-                value={formData.age}
-                onChange={handleChange}
-                min="1"
-                required
-              />
-
-              <div className="form-actions">
+              <div className="modal-actions">
 
                 <button
                   type="button"
-                  className="clear-btn"
-                  onClick={closeForm}
+                  className="cancel-btn"
+                  onClick={closeModal}
                 >
                   Cancel
                 </button>
 
                 <button
                   type="submit"
-                  className="add-btn"
+                  className="save-btn"
                 >
                   {editingStudent
                     ? "Update Student"
@@ -497,6 +507,7 @@ function App() {
           </div>
 
         </div>
+
       )}
 
     </div>
