@@ -156,7 +156,7 @@ function App() {
     <div className="app">
       <header className="topbar">
         <div>
-          <div className="brand">🎓 StudentHub Version 2</div>
+          <div className="brand">🎓 StudentHub Version 3</div>
           <p>Student Management System</p>
         </div>
 
