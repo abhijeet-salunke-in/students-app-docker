@@ -156,7 +156,7 @@ function App() {
     <div className="app">
       <header className="topbar">
         <div>
-          <div className="brand">🎓 StudentHub</div>
+          <div className="brand">🎓 StudentHub V1</div>
           <p>Student Management System</p>
         </div>
 
@@ -169,7 +169,7 @@ function App() {
         <section className="hero">
           <div>
             <span className="eyebrow">COLLEGE DATABASE</span>
-            <h1>Manage your students.</h1>
+           <h1>Manage your students.</h1>
             <p>
               Add, update, search and manage student records from one simple
               dashboard.
